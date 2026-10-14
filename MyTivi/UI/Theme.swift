@@ -64,7 +64,7 @@ final class Clock: ObservableObject {
 
     init() {
         timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.now = Date().timeIntervalSince1970 }
+            Task { @MainActor [weak self] in self?.now = Date().timeIntervalSince1970 }
         }
     }
 }
@@ -81,10 +81,11 @@ struct TvRowButtonStyle: ButtonStyle {
     var padding = EdgeInsets(top: 14, leading: 22, bottom: 14, trailing: 22)
 
     func makeBody(configuration: Configuration) -> some View {
-        Body(configuration: configuration, padding: padding)
+        RowBody(configuration: configuration, padding: padding)
     }
 
-    private struct Body: View {
+    // Không đặt tên "Body": trùng với kiểu Body mà ButtonStyle yêu cầu
+    private struct RowBody: View {
         let configuration: ButtonStyleConfiguration
         let padding: EdgeInsets
         @Environment(\.isFocused) private var focused
@@ -110,10 +111,10 @@ struct TvRowButtonStyle: ButtonStyle {
 /// Nút dạng "viên thuốc" cho màn hình Cài đặt.
 struct TvPillButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        Body(configuration: configuration)
+        PillBody(configuration: configuration)
     }
 
-    private struct Body: View {
+    private struct PillBody: View {
         let configuration: ButtonStyleConfiguration
         @Environment(\.isFocused) private var focused
 

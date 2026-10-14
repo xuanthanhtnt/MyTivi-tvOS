@@ -1,0 +1,45 @@
+name: Build tvOS
+
+# Kiểm tra mã nguồn build được cho Apple TV (không ký, không cài được lên máy).
+# Muốn cài lên Apple TV thì build bằng Xcode trên Mac (xem README).
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode version
+        run: |
+          xcodebuild -version
+          xcodebuild -showsdks | grep -i appletv || true
+
+      - name: Download tvOS platform if missing
+        run: |
+          if ! xcrun simctl list runtimes | grep -q tvOS; then
+            xcodebuild -downloadPlatform tvOS
+          fi
+
+      - name: Build (unsigned)
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project MyTivi.xcodeproj \
+            -scheme MyTivi \
+            -configuration Release \
+            -destination 'generic/platform=tvOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tee build.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
+          grep -q "BUILD SUCCEEDED" build.log
+
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log

@@ -80,6 +80,16 @@ File .ipa chưa ký nên không cài thẳng được; cần một công cụ k�
 [atvloadly](https://github.com/bitxeno/atvloadly) là web service chạy Docker trên Linux: ghép với Apple TV qua mạng,
 ký app bằng Apple ID (miễn phí cũng được) và **tự gia hạn** trước khi hết 7 ngày. Đây là công cụ không chính thức.
 
+**Cách nhanh (Proxmox):** vào *Shell* của node Proxmox, chạy script `tools/proxmox-atvloadly.sh`
+(repo Public thì dùng được lệnh một dòng):
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/xuanthanhtnt/MyTivi-tvOS/main/tools/proxmox-atvloadly.sh)"
+```
+Script tự tạo LXC, cài Docker + Avahi + atvloadly và in ra địa chỉ web; sau đó làm tiếp từ bước 3 bên dưới.
+Đổi thông số bằng biến môi trường, ví dụ `CTID=150 BRIDGE=vmbr1 bash proxmox-atvloadly.sh`.
+
+**Cách làm tay:**
+
 1. **Proxmox:** tạo LXC Debian 12, **bỏ tick Unprivileged**, *Options → Features* bật **nesting** (và **keyctl**).
    Card mạng gắn `vmbr0`, **cùng mạng LAN với Apple TV** (tìm thiết bị bằng mDNS; khác VLAN sẽ không thấy).
    Nếu Docker trong LXC trục trặc, dùng một VM Debian nhỏ.

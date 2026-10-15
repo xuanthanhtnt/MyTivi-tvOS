@@ -6,6 +6,8 @@ name: Build tvOS
 on:
   workflow_dispatch:
   push:
+    # Sửa script/README thì không cần build lại
+    paths-ignore: ['tools/**', '**.md']
   pull_request:
 
 # Cần quyền ghi để tạo bản phát hành (Release)

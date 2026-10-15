@@ -26,15 +26,26 @@ final class PlayerEngine: ObservableObject {
 
     init() {
         player.automaticallyWaitsToMinimizeStalling = true
+        player.preventsDisplaySleepDuringVideoPlayback = true
         timeObserver = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] p, _ in
-            let waiting = p.timeControlStatus == .waitingToPlayAtSpecifiedRate
-            Task { @MainActor [weak self] in self?.setBuffering(waiting) }
+            let status = p.timeControlStatus
+            Task { @MainActor [weak self] in self?.playbackStatusChanged(status) }
         }
     }
 
-    private func setBuffering(_ waiting: Bool) {
-        let value = waiting && currentURL != nil
+    private func playbackStatusChanged(_ status: AVPlayer.TimeControlStatus) {
+        let value = status == .waitingToPlayAtSpecifiedRate && currentURL != nil
         if buffering != value { buffering = value }
+        // Đang phát (hoặc đang tải để phát) thì không cho Apple TV bật màn hình chờ
+        updateIdleTimer(active: status != .paused && currentURL != nil && !suspended)
+    }
+
+    /// AVPlayerLayer không tự chặn màn hình chờ của tvOS như AVPlayerViewController,
+    /// nên phải tự tắt/bật lại idle timer theo trạng thái phát.
+    private func updateIdleTimer(active: Bool) {
+        if UIApplication.shared.isIdleTimerDisabled != active {
+            UIApplication.shared.isIdleTimerDisabled = active
+        }
     }
 
     // MARK: Điều khiển
@@ -56,6 +67,7 @@ final class PlayerEngine: ObservableObject {
         buffering = false
         error = nil
         info = nil
+        updateIdleTimer(active: false)
     }
 
     func setPreviewMode(_ on: Bool) {
@@ -69,6 +81,7 @@ final class PlayerEngine: ObservableObject {
         suspended = true
         retryTask?.cancel()
         player.pause()
+        updateIdleTimer(active: false)
     }
 
     /// Quay lại app: kênh live thì nạp lại để về điểm trực tiếp.

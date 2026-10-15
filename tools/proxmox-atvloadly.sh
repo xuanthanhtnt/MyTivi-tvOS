@@ -5,8 +5,10 @@
 #  Chạy trên Proxmox host (tab Shell của node, quyền root):
 #      bash proxmox-atvloadly.sh
 #
-#  Có thể đổi thông số bằng biến môi trường, ví dụ:
-#      CTID=150 BRIDGE=vmbr1 STORAGE=local-zfs bash proxmox-atvloadly.sh
+#  Khi chạy, script hỏi VLAN và mật khẩu root của LXC.
+#  Có thể đặt sẵn bằng biến môi trường để khỏi hỏi, ví dụ:
+#      VLAN=30 ROOT_PW='MatKhau123' bash proxmox-atvloadly.sh
+#      CTID=150 BRIDGE=vmbr1 STORAGE=local-zfs VLAN=none bash proxmox-atvloadly.sh
 #
 #  Script sẽ:
 #   1. Tải template Debian 12 (nếu chưa có)
@@ -20,6 +22,8 @@ set -euo pipefail
 CTID="${CTID:-}"                       # để trống = lấy ID trống tiếp theo
 CT_HOSTNAME="${CT_HOSTNAME:-atvloadly}"
 BRIDGE="${BRIDGE:-vmbr0}"              # bridge phải cùng mạng LAN với Apple TV
+VLAN="${VLAN:-}"                       # VLAN tag (vd 30); "none" = không dùng VLAN; trống = hỏi
+ROOT_PW="${ROOT_PW:-}"                 # mật khẩu root của LXC; trống = hỏi
 STORAGE="${STORAGE:-}"                 # nơi chứa ổ đĩa LXC; trống = tự chọn
 TEMPLATE_STORAGE="${TEMPLATE_STORAGE:-local}"
 DISK_GB="${DISK_GB:-8}"
@@ -53,7 +57,37 @@ if [ -z "$STORAGE" ]; then
   [ -n "$STORAGE" ] || die "Không tìm thấy storage cho LXC. Đặt STORAGE=<tên storage> rồi chạy lại."
 fi
 
-info "CT ID: $CTID | hostname: $CT_HOSTNAME | bridge: $BRIDGE | storage: $STORAGE | disk: ${DISK_GB}G | RAM: ${MEMORY_MB}MB"
+# ---------------- Hỏi VLAN và mật khẩu ----------------
+if [ -z "$VLAN" ]; then
+  if [ -t 0 ]; then
+    read -r -p "VLAN tag cho LXC (cùng VLAN với Apple TV, vd 30; Enter = không dùng VLAN): " VLAN
+  fi
+  VLAN="${VLAN:-none}"
+fi
+if [ "$VLAN" != "none" ]; then
+  [[ "$VLAN" =~ ^[0-9]+$ ]] && [ "$VLAN" -ge 1 ] && [ "$VLAN" -le 4094 ] || die "VLAN '$VLAN' không hợp lệ (1-4094)."
+fi
+
+PW_SHOWN=0
+if [ -z "$ROOT_PW" ]; then
+  if [ -t 0 ]; then
+    while true; do
+      read -r -s -p "Mật khẩu root cho LXC (Enter = tạo ngẫu nhiên): " p1; echo
+      if [ -z "$p1" ]; then break; fi
+      read -r -s -p "Nhập lại mật khẩu: " p2; echo
+      if [ "$p1" != "$p2" ]; then warn "Hai lần nhập không khớp, nhập lại."; continue; fi
+      if [ "${#p1}" -lt 5 ]; then warn "Mật khẩu phải từ 5 ký tự, nhập lại."; continue; fi
+      ROOT_PW="$p1"; break
+    done
+  fi
+  if [ -z "$ROOT_PW" ]; then ROOT_PW="$(openssl rand -hex 8)"; PW_SHOWN=1; fi
+fi
+[ "${#ROOT_PW}" -ge 5 ] || die "Mật khẩu root phải từ 5 ký tự."
+
+NET0="name=eth0,bridge=${BRIDGE},ip=dhcp"
+[ "$VLAN" != "none" ] && NET0="${NET0},tag=${VLAN}"
+
+info "CT ID: $CTID | hostname: $CT_HOSTNAME | bridge: $BRIDGE | VLAN: $VLAN | storage: $STORAGE | disk: ${DISK_GB}G | RAM: ${MEMORY_MB}MB"
 
 # ---------------- 1. Template Debian 12 ----------------
 info "Cập nhật danh sách template..."
@@ -66,7 +100,6 @@ if ! pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE"; then
 fi
 
 # ---------------- 2. Tạo LXC ----------------
-ROOT_PW="$(openssl rand -hex 8)"
 info "Tạo LXC $CTID..."
 pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" \
   --hostname "$CT_HOSTNAME" \
@@ -74,7 +107,7 @@ pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" \
   --memory "$MEMORY_MB" \
   --swap 512 \
   --rootfs "${STORAGE}:${DISK_GB}" \
-  --net0 "name=eth0,bridge=${BRIDGE},ip=dhcp" \
+  --net0 "$NET0" \
   --unprivileged 0 \
   --features "nesting=1" \
   --onboot 1 \
@@ -96,7 +129,7 @@ info "Chờ LXC có mạng..."
 for i in $(seq 1 60); do
   if pct exec "$CTID" -- getent hosts deb.debian.org >/dev/null 2>&1; then break; fi
   sleep 2
-  [ "$i" -eq 60 ] && die "LXC chưa có mạng sau 2 phút. Kiểm tra DHCP trên bridge $BRIDGE."
+  [ "$i" -eq 60 ] && die "LXC chưa có mạng sau 2 phút. Kiểm tra DHCP trên bridge $BRIDGE (VLAN: $VLAN) và cổng switch có cho VLAN này đi qua không."
 done
 
 # ---------------- 3 + 4. Cài Docker, Avahi, atvloadly ----------------
@@ -146,7 +179,12 @@ AVAHI_OK="$(pct exec "$CTID" -- systemctl is-active avahi-daemon || true)"
 echo
 echo -e "${GREEN}================== XONG ==================${NC}"
 echo -e " LXC ID         : $CTID ($CT_HOSTNAME)"
-echo -e " Mật khẩu root  : $ROOT_PW   (hãy lưu lại)"
+if [ "$PW_SHOWN" -eq 1 ]; then
+  echo -e " Mật khẩu root  : $ROOT_PW   (ngẫu nhiên — hãy lưu lại)"
+else
+  echo -e " Mật khẩu root  : (mật khẩu bạn đã nhập)"
+fi
+echo -e " Mạng           : $BRIDGE, VLAN $VLAN, DHCP"
 echo -e " Avahi          : $AVAHI_OK"
 echo -e " atvloadly      : $WEB_OK"
 echo -e " Giao diện web  : ${GREEN}http://${CT_IP}:${WEB_PORT}${NC}"

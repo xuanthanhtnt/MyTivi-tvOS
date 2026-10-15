@@ -86,7 +86,8 @@ ký app bằng Apple ID (miễn phí cũng được) và **tự gia hạn** trư
 bash -c "$(curl -fsSL https://raw.githubusercontent.com/xuanthanhtnt/MyTivi-tvOS/main/tools/proxmox-atvloadly.sh)"
 ```
 Script tự tạo LXC, cài Docker + Avahi + atvloadly và in ra địa chỉ web; sau đó làm tiếp từ bước 3 bên dưới.
-Đổi thông số bằng biến môi trường, ví dụ `CTID=150 BRIDGE=vmbr1 bash proxmox-atvloadly.sh`.
+Khi chạy, script hỏi **VLAN** (phải cùng VLAN với Apple TV) và **mật khẩu root** của LXC.
+Đặt sẵn để khỏi hỏi: `VLAN=30 ROOT_PW='MatKhau123' bash proxmox-atvloadly.sh` (thêm `CTID=150`, `BRIDGE=vmbr1` nếu cần).
 
 **Cách làm tay:**
 

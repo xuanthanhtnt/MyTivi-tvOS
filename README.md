@@ -68,10 +68,32 @@ Giữ nguyên giao diện kiểu TiviMate và cách dùng của bản Android, �
   mỗi lần bạn đẩy bản mới, Apple TV **tự cập nhật** — thay cho tính năng tự cập nhật APK của bản Android
   (tvOS không cho app tự tải và cài bản cập nhật).
 
-### Kiểm tra build trên GitHub (không cần Mac)
-File `.github/workflows/build-tvos.yml` build thử app trên máy macOS của GitHub mỗi lần push.
-Tải toàn bộ thư mục này (cả thư mục ẩn `.github`) lên một repo, vào tab **Actions** xem kết quả.
-Bản build này không ký nên **không cài được** lên Apple TV — chỉ để biết mã nguồn có build được không.
+### Bản build trên GitHub (MyTivi.ipa)
+Mỗi lần push lên nhánh `main`, GitHub Actions build app trên máy macOS và tạo một **Release** `v<số lượt build>`
+kèm file **MyTivi.ipa** (chưa ký). Link bản mới nhất:
+`https://github.com/xuanthanhtnt/MyTivi-tvOS/releases/latest/download/MyTivi.ipa`
+(repo phải để Public thì link mới tải được khi chưa đăng nhập).
+
+File .ipa chưa ký nên không cài thẳng được; cần một công cụ ký bằng Apple ID như **atvloadly** bên dưới.
+
+## Cài và tự gia hạn bằng atvloadly (Proxmox / Linux, không cần Mac)
+[atvloadly](https://github.com/bitxeno/atvloadly) là web service chạy Docker trên Linux: ghép với Apple TV qua mạng,
+ký app bằng Apple ID (miễn phí cũng được) và **tự gia hạn** trước khi hết 7 ngày. Đây là công cụ không chính thức.
+
+1. **Proxmox:** tạo LXC Debian 12, **bỏ tick Unprivileged**, *Options → Features* bật **nesting** (và **keyctl**).
+   Card mạng gắn `vmbr0`, **cùng mạng LAN với Apple TV** (tìm thiết bị bằng mDNS; khác VLAN sẽ không thấy).
+   Nếu Docker trong LXC trục trặc, dùng một VM Debian nhỏ.
+2. **Trong LXC:** `apt install -y docker.io avahi-daemon`, rồi chạy container theo lệnh `docker run --privileged ...`
+   trong README của atvloadly (mount thư mục dữ liệu, `/var/run/dbus`, `/var/run/avahi-daemon`, mở cổng 5533).
+3. **Ghép Apple TV:** trên TV vào *Cài đặt > Điều khiển từ xa và thiết bị > Ứng dụng và thiết bị điều khiển từ xa*;
+   mở `http://<IP-LXC>:5533`, bấm vào Apple TV, nhập mã.
+4. Đăng nhập Apple ID, chọn file **MyTivi.ipa** (tải từ link ở trên), bấm **Install**.
+
+Lưu ý:
+- Nên dùng **Apple ID riêng**: không nhập kịp mã xác thực 2 lớp có thể làm tài khoản bị tạm khóa.
+- Cập nhật tvOS xong phải ghép lại; tvOS mới thường chưa được hỗ trợ ngay → nên tắt tự cập nhật tvOS.
+- Apple ID miễn phí: tối đa 3 app đang hoạt động cùng lúc.
+- Có bản MyTivi mới thì tải MyTivi.ipa mới và cài lại trong atvloadly (dữ liệu trong app vẫn giữ).
 
 ## Khác biệt so với bản Android
 | | Android | Apple TV |

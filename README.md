@@ -9,7 +9,7 @@ Giữ nguyên giao diện kiểu TiviMate và cách dùng của bản Android, �
 - Apple TV HD hoặc Apple TV 4K, chạy **tvOS 17 trở lên**.
 
 ## Tính năng (giống bản Android)
-- Playlist M3U / một luồng .m3u8, nhóm kênh (group-title), logo, tìm kiếm, kênh yêu thích
+- **Nhiều danh sách kênh** (M3U / một luồng .m3u8) và **nhiều link EPG**, nhóm kênh (group-title), logo, tìm kiếm, kênh yêu thích
 - EPG XMLTV (hỗ trợ .gz): chương trình đang phát, thanh tiến độ, chương trình tiếp theo
 - Màn hình chính kiểu TiviMate: khung xem trước bo góc (**có tiếng**) + thông tin chương trình;
   thanh thời gian có mũi tên "bây giờ"; bảng kênh/chương trình 12 giờ, các hàng trượt ngang cùng nhau
@@ -22,6 +22,26 @@ Giữ nguyên giao diện kiểu TiviMate và cách dùng của bản Android, �
 - Bấm Home / tắt TV thì tự dừng tiếng; quay lại thì phát tiếp từ điểm trực tiếp
 - **Mới so với bản Android:** vào toàn màn hình từ khung xem trước thì kênh chạy tiếp ngay, không phải tải lại;
   hỗ trợ link dạng `url|User-Agent=...&Referer=...`
+
+## Nhiều danh sách kênh (M3U) và nhiều EPG
+Mở **Cài đặt** (◄ mở ngăn nhóm kênh > Cài đặt). Có 2 mục, mỗi nguồn là một hàng:
+
+| Trên hàng | Việc |
+|---|---|
+| Tên + link (bấm OK) | Sửa link / tên hiển thị |
+| ✓ Đang bật / Đang tắt | Bật hoặc tắt nguồn (tắt = tạm không dùng, không mất link) |
+| ▲ Lên | Đưa nguồn lên trên (thứ tự trong ngăn nhóm kênh; với EPG là thứ tự ưu tiên) |
+| Xóa | Xóa nguồn (có hỏi lại) |
+
+- **+ Thêm danh sách kênh** / **+ Thêm link EPG**: nhập link (bắt buộc) và tên (không bắt buộc, để trống thì tự đặt "Danh sách 2", "EPG 2"…).
+  Có thể gõ bằng bàn phím trên iPhone (thông báo "Bàn phím Apple TV").
+- Kênh của các danh sách **đang bật** được gộp lại. Có từ 2 danh sách trở lên thì ngăn nhóm kênh chia mục theo tên danh sách;
+  mỗi mục có **Tất cả kênh** của danh sách đó và các nhóm của nó. "★ Yêu thích" và "Tất cả" vẫn ở trên cùng.
+- Nhiều EPG được gộp theo `tvg-id`; nhiều EPG cùng có một kênh thì **link ở trên được ưu tiên**.
+  **Tự dùng EPG ghi sẵn trong playlist (url-tvg)**: BẬT thì dùng thêm link EPG ghi ở dòng `#EXTM3U` của các playlist.
+- Thay đổi chỉ áp dụng khi bấm **Lưu** (Back / Hủy là bỏ). Phải có ít nhất 1 danh sách kênh đang bật.
+- Mỗi nguồn có cache riêng (`playlist_<id>.m3u`, `epg_<mã>.cache`): một nguồn tải lỗi thì vẫn dùng bản đã lưu của nguồn đó.
+- Cập nhật từ bản cũ (1 link): link cũ tự chuyển thành "Danh sách 1" / "EPG 1", không phải nhập lại.
 
 ## Điều khiển bằng Siri Remote
 
@@ -122,19 +142,19 @@ Nếu playlist của bạn nhiều kênh dạng `.ts`, bước tiếp theo nên 
 | File | Việc |
 |---|---|
 | `App/MyTiviApp.swift` | Điểm vào app; chuyển giữa Màn hình chính / Toàn màn hình / Cài đặt; dừng tiếng khi xuống nền |
-| `Data/Models.swift` | Kênh, chương trình, tra chương trình đang phát / tiếp theo |
+| `Data/Models.swift` | Kênh, nguồn (Source), mục ngăn nhóm kênh (GroupEntry), chương trình, tra chương trình đang phát / tiếp theo |
 | `Data/M3UParser.swift` | Đọc #EXTINF (tvg-id, tvg-logo, group-title…), link có header `url\|User-Agent=…` |
 | `Data/EPGParser.swift` | Đọc XMLTV (luồng, ít tốn RAM), chỉ giữ -2h..+24h |
 | `Data/Gzip.swift` | Giải nén EPG .gz |
 | `Data/Http.swift` | Tải playlist/EPG (URLSession) |
-| `Data/Store.swift` | Trạng thái chung: kênh, yêu thích, EPG, cache, tự cập nhật (tương đương `MainViewModel.kt`) |
-| `Data/Prefs.swift` | Lưu cài đặt (UserDefaults) |
+| `Data/Store.swift` | Trạng thái chung: kênh (gộp nhiều danh sách), yêu thích, EPG (gộp nhiều link), cache theo nguồn, tự cập nhật (tương đương `MainViewModel.kt`) |
+| `Data/Prefs.swift` | Lưu cài đặt (UserDefaults): danh sách nguồn dạng JSON, yêu thích, kênh xem gần nhất |
 | `Data/Guide.swift` | Chia EPG thành các ô trên bảng lịch |
 | `Player/PlayerEngine.swift` | AVPlayer dùng chung (xem trước 480p + toàn màn hình), tự thử lại, lớp hiển thị video |
 | `Player/StreamInfo.swift` | Thông số luồng cho thanh thông tin |
 | `UI/BrowseScreen.swift` | Màn hình chính: xem trước + bảng lịch + ngăn nhóm kênh |
 | `UI/PlayerScreen.swift` | Toàn màn hình, thanh thông tin, bảng chọn kênh |
-| `UI/SetupScreen.swift` | Nhập link playlist / EPG |
+| `UI/SetupScreen.swift` | Cài đặt: nhiều danh sách kênh + nhiều link EPG (thêm / sửa / bật-tắt / xếp thứ tự / xóa) |
 | `UI/Theme.swift`, `UI/LogoView.swift` | Màu, kiểu nút, đồng hồ, bộ nhớ đệm logo |
 
 ## Chỉnh nhanh
@@ -145,6 +165,6 @@ Nếu playlist của bạn nhiều kênh dạng `.ts`, bước tiếp theo nên 
 
 ## Hạn chế hiện tại
 - EPG ghép theo `tvg-id`; kênh không có tvg-id hiện "Không có thông tin".
-- Chưa có: nhập số kênh, ghi hình, catch-up, multiview, khóa phụ huynh, Xtream Codes, nhiều playlist.
+- Chưa có: nhập số kênh, ghi hình, catch-up, multiview, khóa phụ huynh, Xtream Codes.
 
 Chỉ dùng với nội dung bạn có quyền xem.

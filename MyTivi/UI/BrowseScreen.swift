@@ -22,15 +22,14 @@ struct BrowseScreen: View {
     static let topH: CGFloat = 320         // chiều cao khung xem trước
 
     enum Column { case header, star, cell }
-    enum Focus: Hashable { case guide, search, group(Int), refresh, settings }
+    enum Focus: Hashable { case guide, search, group(String), refresh, settings }
 
     @StateObject private var clock = Clock()
 
-    @State private var sel = 1                 // 0 = Yêu thích, 1 = Tất cả, 2.. = nhóm
+    @State private var selKey = "all"          // mục đang chọn trong ngăn nhóm kênh (xem GroupEntry)
     @State private var query = ""
     @State private var showDrawer = false
-    @State private var groups: [String] = []
-    @State private var counts: [Int] = []
+    @State private var entries: [GroupEntry] = []
     @State private var shown: [Channel] = []
 
     @State private var row = 0
@@ -43,7 +42,6 @@ struct BrowseScreen: View {
 
     @FocusState private var focus: Focus?
 
-    private var labels: [String] { ["★ Yêu thích", "Tất cả"] + groups }
     private var now: TimeInterval { clock.now }
     /// Mốc đầu bảng lịch tự dời theo mỗi nửa giờ (để Apple TV mở cả ngày vẫn đúng giờ)
     private var windowStart: TimeInterval { floorTo(now, TimeConst.halfHour) }
@@ -86,7 +84,8 @@ struct BrowseScreen: View {
         }
         .onChange(of: store.revision) { recompute() }
         .onChange(of: store.favorites) { recompute() }
-        .onChange(of: sel) { recompute() }
+        .onChange(of: store.playlists) { recompute() }
+        .onChange(of: selKey) { recompute() }
         .onChange(of: query) { recompute() }
         .onChange(of: isActive) { _, active in
             if active {
@@ -96,7 +95,7 @@ struct BrowseScreen: View {
         }
         .onChange(of: focus) { _, f in
             // Di chuyển tới nhóm nào trong ngăn, danh sách kênh đổi theo nhóm đó
-            if case .group(let i)? = f, i != sel { sel = i }
+            if case .group(let k)? = f, k != selKey { selKey = k }
         }
         .task(id: PreviewKey(url: focusedChannel?.url, active: isActive)) {
             await updatePreview()
@@ -109,25 +108,14 @@ struct BrowseScreen: View {
         let keepURL = focusedChannel?.url
         let channels = store.channels
         let favs = store.favorites
-        var order: [String] = []
-        var byGroup: [String: Int] = [:]
-        for ch in channels {
-            if byGroup[ch.group] == nil { order.append(ch.group) }
-            byGroup[ch.group, default: 0] += 1
+        entries = buildGroupEntries(channels, favorites: favs, sources: store.playlists)
+        // Mục đang chọn không còn (danh sách bị xóa / tắt, nhóm hết kênh) thì về "Tất cả"
+        var entry = entries.first { $0.key == selKey && !$0.header }
+        if entry == nil {
+            entry = entries.first { $0.key == "all" }
+            if selKey != "all" { selKey = "all" }
         }
-        groups = order
-        counts = [channels.filter { favs.contains($0.url) }.count, channels.count] + order.map { byGroup[$0] ?? 0 }
-        let current = sel < order.count + 2 ? sel : 1
-        if current != sel { sel = current }
-
-        let base: [Channel]
-        switch current {
-        case 0: base = channels.filter { favs.contains($0.url) }
-        case 1: base = channels
-        default:
-            let g = order[current - 2]
-            base = channels.filter { $0.group == g }
-        }
+        let base = channelsFor(entry, channels, favorites: favs)
         let q = query.trimmingCharacters(in: .whitespaces)
         shown = q.isEmpty ? base : base.filter { $0.name.localizedCaseInsensitiveContains(q) }
 
@@ -260,7 +248,7 @@ struct BrowseScreen: View {
     private func openDrawer() {
         guard !showDrawer else { return }
         showDrawer = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { focus = .group(sel) }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { focus = .group(selKey) }
     }
 
     private func closeDrawer() {
@@ -438,9 +426,9 @@ struct BrowseScreen: View {
     }
 
     private var emptyText: String {
-        if sel == 0 { return "Chưa có kênh yêu thích. Bấm ▶︎❙❙ trên remote khi đang chọn kênh để thêm." }
+        if selKey == "fav" { return "Chưa có kênh yêu thích. Bấm ▶︎❙❙ trên remote khi đang chọn kênh để thêm." }
         if store.loading { return "Đang tải danh sách kênh…" }
-        if store.playlistUrl.isEmpty { return "Chưa có playlist. Bấm ◄ rồi chọn Cài đặt." }
+        if !store.hasPlaylists { return "Chưa có playlist. Bấm ◄ rồi chọn Cài đặt." }
         return "Không có kênh nào."
     }
 
@@ -538,30 +526,46 @@ struct BrowseScreen: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 4) {
-                        ForEach(Array(labels.enumerated()), id: \.offset) { i, label in
-                            Button(action: closeDrawer) {
+                        ForEach(entries) { e in
+                            if e.header {
+                                // Tiêu đề mục của một danh sách kênh (có từ 2 danh sách trở lên)
                                 HStack {
-                                    Text(label)
-                                        .foregroundStyle(i == sel ? Theme.accent : Color.white)
-                                        .fontWeight(i == sel ? .bold : .regular)
+                                    Text(e.label.uppercased())
+                                        .font(.system(size: 22, weight: .bold))
+                                        .foregroundStyle(Theme.accent)
                                         .lineLimit(1)
                                     Spacer(minLength: 10)
-                                    Text("\(i < counts.count ? counts[i] : 0)")
-                                        .font(.system(size: 22))
+                                    Text("\(e.count) kênh")
+                                        .font(.system(size: 20))
                                         .foregroundStyle(Theme.dim)
                                 }
-                                .font(.system(size: 28))
+                                .padding(EdgeInsets(top: 16, leading: 20, bottom: 2, trailing: 20))
+                                .id(e.key)
+                            } else {
+                                Button(action: closeDrawer) {
+                                    HStack {
+                                        Text(e.label)
+                                            .foregroundStyle(e.key == selKey ? Theme.accent : Color.white)
+                                            .fontWeight(e.key == selKey ? .bold : .regular)
+                                            .lineLimit(1)
+                                        Spacer(minLength: 10)
+                                        Text("\(e.count)")
+                                            .font(.system(size: 22))
+                                            .foregroundStyle(Theme.dim)
+                                    }
+                                    .font(.system(size: 28))
+                                }
+                                .buttonStyle(TvRowButtonStyle(padding: EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20)))
+                                .focused($focus, equals: .group(e.key))
+                                .onMoveCommand { if $0 == .right { closeDrawer() } }
+                                .id(e.key)
                             }
-                            .buttonStyle(TvRowButtonStyle(padding: EdgeInsets(top: 12, leading: 20, bottom: 12, trailing: 20)))
-                            .focused($focus, equals: .group(i))
-                            .onMoveCommand { if $0 == .right { closeDrawer() } }
-                            .id(i)
                         }
                     }
                     .padding(.vertical, 8)
                     .padding(.horizontal, 6)
                 }
-                .onAppear { proxy.scrollTo(sel, anchor: .center) }
+                .onAppear { proxy.scrollTo(selKey, anchor: .center) }
             }
 
             Rectangle().fill(Theme.line).frame(height: 2)
@@ -611,6 +615,8 @@ struct BrowseScreen: View {
 
     private var statusText: String {
         var s = "\(store.channels.count) kênh"
+        let lists = store.playlists.filter(\.enabled).count
+        if lists > 1 { s += " từ \(lists) danh sách" }
         if let d = store.lastUpdated { s += " · cập nhật \(Fmt.hhmm(d))" }
         return s
     }

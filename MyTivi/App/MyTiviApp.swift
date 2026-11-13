@@ -32,7 +32,7 @@ struct RootView: View {
     init(store: Store, engine: PlayerEngine) {
         self._store = ObservedObject(wrappedValue: store)
         self._engine = ObservedObject(wrappedValue: engine)
-        self._showSetup = State(initialValue: store.playlistUrl.isEmpty)
+        self._showSetup = State(initialValue: !store.hasPlaylists)
     }
 
     private var browseActive: Bool { session == nil && !showSetup }
@@ -60,12 +60,13 @@ struct RootView: View {
 
             if showSetup {
                 SetupScreen(
-                    initialUrl: store.playlistUrl,
-                    initialEpg: store.epgUrl,
-                    canCancel: !store.playlistUrl.isEmpty,
-                    onSave: { url, epg in
-                        if url != store.playlistUrl || epg != store.epgUrl {
-                            store.savePlaylist(url: url, epgUrl: epg)
+                    initialPlaylists: store.playlists,
+                    initialEpgs: store.epgSources,
+                    initialUseAutoEpg: store.useAutoEpg,
+                    canCancel: store.hasPlaylists,
+                    onSave: { playlists, epgs, autoEpg in
+                        if playlists != store.playlists || epgs != store.epgSources || autoEpg != store.useAutoEpg {
+                            store.saveSources(playlists: playlists, epgs: epgs, useAutoEpg: autoEpg)
                         }
                         showSetup = false
                     },

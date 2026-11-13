@@ -108,22 +108,26 @@ struct TvRowButtonStyle: ButtonStyle {
     }
 }
 
-/// Nút dạng "viên thuốc" cho màn hình Cài đặt.
+/// Nút dạng "viên thuốc" cho màn hình Cài đặt (compact = nút nhỏ trong từng hàng).
 struct TvPillButtonStyle: ButtonStyle {
+    var compact = false
+
     func makeBody(configuration: Configuration) -> some View {
-        PillBody(configuration: configuration)
+        PillBody(configuration: configuration, compact: compact)
     }
 
     private struct PillBody: View {
         let configuration: ButtonStyleConfiguration
+        let compact: Bool
         @Environment(\.isFocused) private var focused
 
         var body: some View {
             configuration.label
-                .font(.system(size: 30, weight: .semibold))
+                .font(.system(size: compact ? 24 : 30, weight: .semibold))
+                .lineLimit(1)
                 .foregroundStyle(focused ? Color.black : Color.white)
-                .padding(.horizontal, 40)
-                .padding(.vertical, 18)
+                .padding(.horizontal, compact ? 26 : 40)
+                .padding(.vertical, compact ? 14 : 18)
                 .background(Capsule().fill(focused ? Theme.accent : Theme.focusBg))
                 .scaleEffect(focused ? 1.06 : 1)
                 .animation(.easeOut(duration: 0.15), value: focused)

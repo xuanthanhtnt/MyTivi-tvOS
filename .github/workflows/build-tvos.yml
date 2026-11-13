@@ -46,6 +46,12 @@ jobs:
             build | tee build.log | grep -E "error:|warning:|BUILD (SUCCEEDED|FAILED)" || true
           grep -q "BUILD SUCCEEDED" build.log
 
+      # Build lỗi: đưa các dòng "error:" lên phần Annotations của lượt chạy cho dễ xem
+      - name: Report build errors
+        if: failure()
+        run: |
+          grep -E "error:" build.log | sort -u | head -40 | while IFS= read -r l; do echo "::error::$l"; done || true
+
       - name: Package MyTivi.ipa
         run: |
           APP="build/Build/Products/Release-appletvos/MyTivi.app"
